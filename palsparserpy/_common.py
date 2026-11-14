@@ -1,20 +1,33 @@
 """
-Helpers the three translators share: number handling, PALS name/value lists,
-facility lookup, and the multipole representations.
+Helpers the three translators share: name and parameter patterns, number
+handling, derived values, PALS name/value lists, facility lookup, and the
+multipole representations.
 """
 
 from __future__ import annotations
 
 import cmath
 import math
+import re
 from typing import Dict, List, Optional, Tuple
 
 from .node import YAMLNode
 
-__all__ = ["approx", "fmt", "try_float", "name_value_pairs", "value_text",
+__all__ = ["NAME_RE", "MULTIPOLE_RE",
+           "approx", "fmt", "try_float", "fold", "times", "scale", "shift",
+           "name_value_pairs", "value_text",
            "ctrl_variables", "facility_entry", "facility_props",
            "FullRepresentation", "ABRepresentation", "tilt_rotation",
            "fill_multipoles"]
+
+# A plain identifier: what every target format accepts as a bare name, and so
+# what a translated element, attribute or variable name has to look like.
+NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# A PALS path naming one multipole component, as `MagneticMultipoleP.Kn1L`.
+# The groups are: K or B (normalized or field), n or s (normal or skew), the
+# multipole order, and a trailing L when the component is length integrated.
+MULTIPOLE_RE = re.compile(r"^MagneticMultipoleP\.([KB])([ns])([0-9]+)(L?)$")
 
 # The tolerance Julia's `isapprox` uses by default, which is what the reference
 # implementation of these translators compared with.
@@ -61,6 +74,71 @@ def try_float(text) -> Optional[float]:
         return float(str(text).strip())
     except (TypeError, ValueError):
         return None
+
+
+# ─── derived values ──────────────────────────────────────────────────────────
+# A target value is often not a PALS parameter as written but something computed
+# from one or more of them. Where every input is a number the computation can be
+# done here; where any is an expression it has to be handed to the target program
+# to evaluate, written out in the target's own syntax. These four take care of
+# that split, so that each translator writes only the expression text.
+
+def fold(text: str, f, *args: str) -> str:
+    """``text``, or the number it comes to when every one of ``args`` is a number.
+
+    A PALS parameter may be written as an expression, which only the target
+    program can evaluate, or as a plain number, which the translation can work
+    with. Where a target value has to be derived from several PALS ones, ``text``
+    is that derivation written as a target expression and ``f`` is the same
+    derivation as a function, applied here when all of its inputs parse.
+    """
+    values = [try_float(a) for a in args]
+    if any(v is None for v in values):
+        return text
+    result = f(*values)
+    return fmt(result) if math.isfinite(result) else text
+
+
+def times(a: str, b: str) -> str:
+    """The product of two target values, without the clutter of a factor of one.
+
+    Two numbers are multiplied out here; a unit factor -- which is what an element
+    of unit length gives, and what several of the bend derivations reduce to --
+    comes back as the other operand alone rather than as a product with nothing in
+    it.
+    """
+    va, vb = try_float(a), try_float(b)
+    if va is not None and vb is not None:
+        return fmt(va * vb)
+    if va == 1:
+        return b
+    if vb == 1:
+        return a
+    return f"({a}) * ({b})"
+
+
+def scale(text: str, factor: float) -> str:
+    """``text`` scaled by ``factor``, as a target value.
+
+    PALS and the target formats differ in the units of nearly every quantity that
+    is not a length or an angle: energies are eV against GeV, voltages V against
+    MV, frequencies Hz against MHz. A value written as a number is scaled here and
+    comes out a number; one written as an expression -- a constant, say -- is left
+    for the target program to evaluate and comes out an expression.
+    """
+    if factor == 1:
+        return text
+    value = try_float(text)
+    return f"({text}) * {fmt(factor)}" if value is None else fmt(value * factor)
+
+
+def shift(text: str, offset: float) -> str:
+    """``text`` with ``offset`` added, as a target value. As with :func:`scale`, a
+    number comes out a number and an expression comes out an expression."""
+    if offset == 0:
+        return text
+    value = try_float(text)
+    return f"({text}) + {fmt(offset)}" if value is None else fmt(value + offset)
 
 
 # ─── PALS name/value lists ───────────────────────────────────────────────────
