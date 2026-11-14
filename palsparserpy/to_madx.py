@@ -9,17 +9,16 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from ._common import (FullRepresentation, approx, ctrl_variables, facility_props,
-                      fill_multipoles, fmt, name_value_pairs, tilt_rotation,
-                      try_float, value_text)
+from ._common import (MULTIPOLE_RE, NAME_RE, FullRepresentation, approx,
+                      ctrl_variables, facility_props, fill_multipoles, fmt,
+                      fold, name_value_pairs, scale, shift, tilt_rotation,
+                      times, try_float, value_text)
 from .node import YAMLNode
 from .parser import evaluate_pals_expression
 
 __all__ = ["MadxEleDef", "MadxBeamline", "MadxController", "MadxAlignment",
            "MadxLattice", "pals_to_madx", "write_madx_file"]
 
-_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_MULTIPOLE_RE = re.compile(r"^MagneticMultipoleP\.([KB])([ns])([0-9]+)(L?)$")
 _ATTR_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
 
 #: The name of the MAD-X variable holding the *signed* magnetic rigidity ``P0/q``
@@ -536,33 +535,6 @@ def _format_madx_line(bl: MadxBeamline) -> str:
 
 
 # ---------------------------------------------------------------------------
-def _madx_scale(text: str, factor: float) -> str:
-    """``text`` scaled by ``factor``, as a MAD-X value.
-
-    PALS and MAD-X differ in the units of nearly every quantity that is not a
-    length or an angle: energies are eV against GeV, voltages V against MV,
-    frequencies Hz against MHz. A value written as a number is scaled here and
-    comes out a number; one written as an expression -- a constant, say -- is left
-    for MAD-X to evaluate and comes out an expression.
-    """
-    if factor == 1:
-        return text
-    value = try_float(text)
-    return f"({text}) * {fmt(factor)}" if value is None else fmt(value * factor)
-
-
-# ---------------------------------------------------------------------------
-def _madx_shift(text: str, offset: float) -> str:
-    """``text`` with ``offset`` added, as a MAD-X value. As with
-    :func:`_madx_scale`, a number comes out a number and an expression comes out
-    an expression."""
-    if offset == 0:
-        return text
-    value = try_float(text)
-    return f"({text}) + {fmt(offset)}" if value is None else fmt(value + offset)
-
-
-# ---------------------------------------------------------------------------
 def _madx_divide(text: str, divisor: str) -> str:
     """``text`` divided by the MAD-X expression ``divisor``, which is not a number
     here and so cannot be worked out during translation."""
@@ -746,9 +718,9 @@ def _ele_to_madx_str(ele: YAMLNode) -> Tuple[List[str], List[str], List[str]]:
                     beta0.append(f"alfy = {val}")
                 # MAD-X counts the phase in turns where PALS counts it in radians.
                 elif k == "phi_a":
-                    beta0.append(f"mux = {_madx_scale(val, 1 / (2 * math.pi))}")
+                    beta0.append(f"mux = {scale(val, 1 / (2 * math.pi))}")
                 elif k == "phi_b":
-                    beta0.append(f"muy = {_madx_scale(val, 1 / (2 * math.pi))}")
+                    beta0.append(f"muy = {scale(val, 1 / (2 * math.pi))}")
                 # MAD-X differentiates against `pt` and PALS against `pz`, and
                 # `pt = beta * pz`.
                 elif k == "eta_x":
@@ -773,9 +745,9 @@ def _ele_to_madx_str(ele: YAMLNode) -> Tuple[List[str], List[str], List[str]]:
                     beam.append(f"particle = {_madx_species(val)}")
                 # PALS states the reference energy in eV, MAD-X in GeV.
                 elif k == "pc_ref":
-                    beam.append(f"pc = {_madx_scale(val, 1e-9)}")
+                    beam.append(f"pc = {scale(val, 1e-9)}")
                 elif k == "E_tot_ref":
-                    beam.append(f"energy = {_madx_scale(val, 1e-9)}")
+                    beam.append(f"energy = {scale(val, 1e-9)}")
                 elif k in ("time_ref", "location"):
                     print(f"{name}: ReferenceP.{k} has no MAD-X equivalent, not "
                           "translated")
@@ -1097,42 +1069,6 @@ def _madx_multipole_attrs(full: FullRepresentation, name: str) -> List[str]:
 
 
 # ---------------------------------------------------------------------------
-def _madx_fold(text: str, f, *args: str) -> str:
-    """``text``, or the number it comes to when every one of ``args`` is a number.
-
-    A PALS parameter may be written as an expression, which only MAD-X can
-    evaluate, or as a plain number, which the translation can work with. Where a
-    MAD-X value has to be derived from several PALS ones, ``text`` is that
-    derivation written as a MAD-X expression and ``f`` is the same derivation as a
-    function, applied here when all of its inputs parse.
-    """
-    values = [try_float(a) for a in args]
-    if any(v is None for v in values):
-        return text
-    result = f(*values)
-    return fmt(result) if math.isfinite(result) else text
-
-
-# ---------------------------------------------------------------------------
-def _madx_times(a: str, b: str) -> str:
-    """The product of two MAD-X values, without the clutter of a factor of one.
-
-    Two numbers are multiplied out here; a unit factor -- which is what an element
-    of unit length gives, and what several of the bend derivations reduce to --
-    comes back as the other operand alone rather than as a product with nothing in
-    it.
-    """
-    va, vb = try_float(a), try_float(b)
-    if va is not None and vb is not None:
-        return fmt(va * vb)
-    if va == 1:
-        return b
-    if vb == 1:
-        return a
-    return f"({a}) * ({b})"
-
-
-# ---------------------------------------------------------------------------
 def _madx_bend_geometry(props: YAMLNode, name: str):
     """The reference geometry of a ``Bend`` as ``(angle, angle_value,
     arc_length)``, or ``None`` if the element states none.
@@ -1160,7 +1096,7 @@ def _madx_bend_geometry(props: YAMLNode, name: str):
         g = bendP["g_ref"].value
     elif "radius_ref" in bendP:
         radius = bendP["radius_ref"].value
-        g = _madx_fold(f"1 / ({radius})", lambda r: 1 / r, radius)
+        g = fold(f"1 / ({radius})", lambda r: 1 / r, radius)
     elif "Bn0_ref" in bendP:
         g = f"{bendP['Bn0_ref'].value} / {_MADX_RIGIDITY}"
     else:
@@ -1183,24 +1119,24 @@ def _madx_bend_geometry(props: YAMLNode, name: str):
     # given.
     if angle is None and g is not None and length is not None:
         if len_kind == "arc":
-            angle = _madx_times(g, length)
+            angle = times(g, length)
         elif len_kind == "chord":
-            angle = _madx_fold(f"2 * asin(({g}) * ({length}) / 2)",
+            angle = fold(f"2 * asin(({g}) * ({length}) / 2)",
                                lambda a, b: 2 * math.asin(a * b / 2), g, length)
         else:
-            angle = _madx_fold(f"asin(({g}) * ({length}))",
+            angle = fold(f"asin(({g}) * ({length}))",
                                lambda a, b: math.asin(a * b), g, length)
 
     if arc is None and angle is not None:
         if len_kind == "chord":
-            arc = _madx_fold(
+            arc = fold(
                 f"({angle}) * ({length}) / (2 * sin(({angle}) / 2))",
                 lambda a, l: a * l / (2 * math.sin(a / 2)), angle, length)
         elif len_kind == "rect":
-            arc = _madx_fold(f"({angle}) * ({length}) / sin({angle})",
+            arc = fold(f"({angle}) * ({length}) / sin({angle})",
                              lambda a, l: a * l / math.sin(a), angle, length)
         elif g is not None:
-            arc = _madx_fold(f"({angle}) / ({g})", lambda a, b: a / b, angle, g)
+            arc = fold(f"({angle}) / ({g})", lambda a, b: a / b, angle, g)
 
     if angle is None and arc is None:
         return None
@@ -1251,7 +1187,7 @@ def _madx_bend_faces(bendP: YAMLNode, name: str, angle) -> List[str]:
             if share == 0:
                 attrs.append(f"{face} = {rect_text}")
                 continue
-            attrs.append(f"{face} = " + _madx_fold(
+            attrs.append(f"{face} = " + fold(
                 f"{rect_text} + {fmt(share)} * ({angle})",
                 lambda r, a, share=share: r + share * a, rect_text, angle))
     return attrs
@@ -1539,7 +1475,7 @@ def _make_madx_ele(ele: YAMLNode) -> Tuple[MadxEleDef, MadxAlignment]:
                 elif bskey == "z_offset":
                     align.append(f"ds = {val}")
                 elif bskey == "x_rot":
-                    align.append(f"dphi = {_madx_scale(val, -1)}")
+                    align.append(f"dphi = {scale(val, -1)}")
                 elif bskey == "y_rot":
                     align.append(f"dtheta = {val}")
                 elif bskey == "z_rot":
@@ -1638,11 +1574,11 @@ def _make_madx_ele(ele: YAMLNode) -> Tuple[MadxEleDef, MadxAlignment]:
                 # PALS states the frequency in Hz and the voltage in volts, MAD-X
                 # in MHz and MV.
                 if rfkey == "frequency":
-                    tmp = f"freq = {_madx_scale(rfP['frequency'].value, 1e-6)},"
+                    tmp = f"freq = {scale(rfP['frequency'].value, 1e-6)},"
                 elif rfkey == "harmonic_number":
                     tmp = f"harmon = {rfP['harmonic_number'].value},"
                 elif rfkey == "voltage":
-                    tmp = f"volt = {_madx_scale(rfP['voltage'].value, 1e-6)},"
+                    tmp = f"volt = {scale(rfP['voltage'].value, 1e-6)},"
                 elif rfkey == "gradient":
                     if "L_active" in rfP:
                         length = rfP["L_active"].value
@@ -1651,12 +1587,12 @@ def _make_madx_ele(ele: YAMLNode) -> Tuple[MadxEleDef, MadxAlignment]:
                     else:
                         raise ValueError(f"{name}: `gradient` needs a length to "
                                          "become the voltage MAD-X states")
-                    tmp = (f"volt = {_madx_scale(rfP['gradient'].value, 1e-6)} * "
+                    tmp = (f"volt = {scale(rfP['gradient'].value, 1e-6)} * "
                            f"{length},")
                 # MAD-X counts the phase in turns where PALS counts it in radians.
                 elif rfkey == "phase":
-                    turns = _madx_scale(rfP['phase'].value, 1 / (2 * math.pi))
-                    tmp = f"lag = {_madx_shift(turns, lag_offset)},"
+                    turns = scale(rfP['phase'].value, 1 / (2 * math.pi))
+                    tmp = f"lag = {shift(turns, lag_offset)},"
                 elif rfkey == "cavity_type":
                     if rfP["cavity_type"].value == "TRAVELING_WAVE":
                         print(f"{name}: a traveling wave cavity is MAD-X's "
@@ -1744,7 +1680,7 @@ def _madx_control_target(cname: str, param: str, facility: YAMLNode,
                              "single element kind")
         kind_wanted, slave = qualifier
 
-    if not _NAME_RE.match(slave):
+    if not NAME_RE.match(slave):
         raise ValueError(f"controller {cname}: `{param}` selects slaves by "
                          "pattern, which MAD-X cannot express")
 
@@ -1760,7 +1696,7 @@ def _madx_control_target(cname: str, param: str, facility: YAMLNode,
     # A controller may drive another controller's variable, under whatever MAD-X
     # calls it.
     if ele_kind == "Controller":
-        if not _NAME_RE.match(path):
+        if not NAME_RE.match(path):
             raise ValueError(f"controller {cname}: `{param}` is not a variable of "
                              f"controller {slave}")
         if (slave, path) not in varmap:
@@ -1771,7 +1707,7 @@ def _madx_control_target(cname: str, param: str, facility: YAMLNode,
     if path == "length":
         return f"{slave}->l", 1.0, False
 
-    m = _MULTIPOLE_RE.match(path)
+    m = MULTIPOLE_RE.match(path)
     if m is not None:
         order = int(m.group(3))
         skew = m.group(2) == "s"

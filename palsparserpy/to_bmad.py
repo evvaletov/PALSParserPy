@@ -9,17 +9,16 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from ._common import (ABRepresentation, FullRepresentation, approx,
-                      ctrl_variables, facility_props, fill_multipoles, fmt,
-                      name_value_pairs, tilt_rotation, try_float, value_text)
+from ._common import (MULTIPOLE_RE, NAME_RE, ABRepresentation,
+                      FullRepresentation, approx, ctrl_variables,
+                      facility_props, fill_multipoles, fmt, fold,
+                      name_value_pairs, tilt_rotation, times, try_float,
+                      value_text)
 from .node import YAMLNode
-from .to_madx import _madx_fold, _madx_times
 
 __all__ = ["BmadEleDef", "BmadBeamline", "BmadController", "BmadLattice",
            "pals_to_bmad", "write_bmad_file"]
 
-_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_MULTIPOLE_RE = re.compile(r"^MagneticMultipoleP\.([KB])([ns])([0-9]+)(L?)$")
 
 
 @dataclass
@@ -494,7 +493,7 @@ def _bmad_control_target(cname: str, param: str,
                              "single element kind")
         kind_wanted, slave = qualifier
 
-    if not _NAME_RE.match(slave):
+    if not NAME_RE.match(slave):
         raise ValueError(f"controller {cname}: `{param}` selects slaves by "
                          "pattern, which a Bmad overlay cannot express")
 
@@ -511,7 +510,7 @@ def _bmad_control_target(cname: str, param: str,
     # A controller may drive another controller's variable, and so may a Bmad
     # overlay.
     if "kind" in props and props["kind"].value == "Controller":
-        if not _NAME_RE.match(path):
+        if not NAME_RE.match(path):
             raise ValueError(f"controller {cname}: `{param}` is not a variable "
                              f"of controller {slave}")
         return f"{slave}[{path}]", 1.0, 0.0
@@ -519,7 +518,7 @@ def _bmad_control_target(cname: str, param: str,
     if path == "length":
         return f"{slave}[L]", 1.0, 0.0
 
-    m = _MULTIPOLE_RE.match(path)
+    m = MULTIPOLE_RE.match(path)
     if m is not None:
         order = int(m.group(3))
         skew = m.group(2) == "s"
@@ -590,7 +589,7 @@ def _multipole_drives(facility: YAMLNode) -> Dict[str, _MultipoleDrive]:
             if "parameter" not in control:
                 continue
             param = control["parameter"].value
-            m = _MULTIPOLE_RE.match(param.rsplit(">", 1)[-1])
+            m = MULTIPOLE_RE.match(param.rsplit(">", 1)[-1])
             if m is None:
                 continue
             target, _, _ = _bmad_control_target(cname, param, facility)
@@ -1244,7 +1243,7 @@ def _make_bmad_ele(ele: YAMLNode, beginning_at_origin: bool = True,
                     else:
                         raise ValueError(f"{name}: `gradient` needs a length to become "
                                          "the voltage Bmad states")
-                    tmp += f"voltage = {_madx_times(rfP['gradient'].value, length)},"
+                    tmp += f"voltage = {times(rfP['gradient'].value, length)},"
 
                 # PALS states RF phases in radians, Bmad in turns.
                 elif rfkey == "phase":
@@ -1443,10 +1442,6 @@ def _combined_shift(props: YAMLNode, name: str) -> Dict[str, str]:
             "x_rot": fmt(b), "y_rot": fmt(a), "z_rot": fmt(c)}
 
 
-# ---------------------------------------------------------------------------
-_PLAIN_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
 def _bmad_origin(props: YAMLNode, name: str, bmad_kind: str,
                  beginning_at_origin: bool) -> List[str]:
     """Translate the origin a ``CoordinateSetP`` places a ``floor_shift``,
@@ -1482,7 +1477,7 @@ def _bmad_origin(props: YAMLNode, name: str, bmad_kind: str,
             raise ValueError(f"{name}: a Bmad floor_shift cannot be placed from the "
                              "global origin when the beginning element is not at it")
         return ["origin_ele = beginning", "origin_ele_ref_pt = exit_end"]
-    if not _PLAIN_NAME.match(origin):
+    if not NAME_RE.match(origin):
         raise ValueError(f"{name}: origin_ele `{origin}` is not a single element "
                          "name, which Bmad needs")
     return [f"origin_ele = {origin}", f"origin_ele_ref_pt = {ref_pt.lower()}"]
@@ -1531,9 +1526,9 @@ def _bmad_girder_slaves(spec: str, name: str) -> str:
     terms = [t.strip() for t in spec.split(",")]
     if len(terms) == 1 and terms[0].count(":") == 1:
         a, b = (x.strip() for x in terms[0].split(":"))
-        if _PLAIN_NAME.match(a) and _PLAIN_NAME.match(b):
+        if NAME_RE.match(a) and NAME_RE.match(b):
             return f"{{{a}:{b}}}"
-    elif all(_PLAIN_NAME.match(t) for t in terms):
+    elif all(NAME_RE.match(t) for t in terms):
         return "{" + ", ".join(terms) + "}"
     raise ValueError(f"Girder {name}: GirderP.elements `{spec}` is neither a list "
                      "of names nor a single range, which is all a Bmad girder takes")
@@ -1614,18 +1609,18 @@ def _bmad_bend_angle(props: YAMLNode, name: str) -> Optional[str]:
         g = bendP["g_ref"].value
     elif "radius_ref" in bendP:
         r = bendP["radius_ref"].value
-        g = _madx_fold(f"1 / ({r})", lambda x: 1 / x, r)
+        g = fold(f"1 / ({r})", lambda x: 1 / x, r)
     else:
         return None
     if "length" in props:
-        return _madx_times(g, props["length"].value)
+        return times(g, props["length"].value)
     if "L_chord" in bendP:
         length = bendP["L_chord"].value
-        return _madx_fold(f"2 * asin(({g}) * ({length}) / 2)",
+        return fold(f"2 * asin(({g}) * ({length}) / 2)",
                           lambda a, b: 2 * math.asin(a * b / 2), g, length)
     if "L_rectangle" in bendP:
         length = bendP["L_rectangle"].value
-        return _madx_fold(f"asin(({g}) * ({length}))",
+        return fold(f"asin(({g}) * ({length}))",
                           lambda a, b: math.asin(a * b), g, length)
     return None
 
@@ -1670,5 +1665,5 @@ def _bmad_bend_face(props: YAMLNode, key: str, name: str) -> str:
     if angle is None:
         raise ValueError(f"{name}: {key} is measured against the bend angle, which "
                          "is not given")
-    return f"{face} = " + _madx_fold(f"{rect} + {share} * ({angle})",
+    return f"{face} = " + fold(f"{rect} + {share} * ({angle})",
                                      lambda r, a: r + share * a, rect, angle)
