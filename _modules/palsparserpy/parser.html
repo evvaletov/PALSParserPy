@@ -384,9 +384,11 @@
 <span class="sd">    Every mathematical expression is evaluated to a number across the expanded</span>
 <span class="sd">    views and ``adjunct`` (see :func:`evaluate_pals_expression`;</span>
 <span class="sd">    ``random()``/``random_gauss()`` are left as text). ``Controller`` elements are</span>
-<span class="sd">    evaluated against their own scoped variable tables, with each control</span>
-<span class="sd">    ``expression`` computed and stored back in its control entry; controllers are</span>
-<span class="sd">    facility-level, so they are found in ``adjunct``.</span>
+<span class="sd">    evaluated against their own scoped variable tables. Each control</span>
+<span class="sd">    ``expression`` keeps its text as written, with the number it evaluates to</span>
+<span class="sd">    beside it as ``value``; a deferred expression, or one that cannot be</span>
+<span class="sd">    evaluated, gets no ``value``. Controllers are facility-level, so they are</span>
+<span class="sd">    found in ``adjunct``.</span>
 
 <span class="sd">    Each view is backed by its own tree; all five are freed independently when</span>
 <span class="sd">    their nodes are garbage collected.</span>

@@ -1154,9 +1154,11 @@ both trees.</p></li>
 <p>Every mathematical expression is evaluated to a number across the expanded
 views and <code class="docutils literal notranslate"><span class="pre">adjunct</span></code> (see <a class="reference internal" href="#palsparserpy.evaluate_pals_expression" title="palsparserpy.evaluate_pals_expression"><code class="xref py py-func docutils literal notranslate"><span class="pre">evaluate_pals_expression()</span></code></a>;
 <code class="docutils literal notranslate"><span class="pre">random()</span></code>/<code class="docutils literal notranslate"><span class="pre">random_gauss()</span></code> are left as text). <code class="docutils literal notranslate"><span class="pre">Controller</span></code> elements are
-evaluated against their own scoped variable tables, with each control
-<code class="docutils literal notranslate"><span class="pre">expression</span></code> computed and stored back in its control entry; controllers are
-facility-level, so they are found in <code class="docutils literal notranslate"><span class="pre">adjunct</span></code>.</p>
+evaluated against their own scoped variable tables. Each control
+<code class="docutils literal notranslate"><span class="pre">expression</span></code> keeps its text as written, with the number it evaluates to
+beside it as <code class="docutils literal notranslate"><span class="pre">value</span></code>; a deferred expression, or one that cannot be
+evaluated, gets no <code class="docutils literal notranslate"><span class="pre">value</span></code>. Controllers are facility-level, so they are
+found in <code class="docutils literal notranslate"><span class="pre">adjunct</span></code>.</p>
 <p>Each view is backed by its own tree; all five are freed independently when
 their nodes are garbage collected.</p>
 </dd></dl>
