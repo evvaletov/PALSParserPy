@@ -93,3 +93,8 @@ pytest
 
 The tests import the package from the checkout, so `pip install -e .` is
 optional; the C library, however, must be built.
+
+## License
+
+PALSParserPy is licensed under the GNU General Public License, version 2
+only (`GPL-2.0-only`). See [LICENSE](LICENSE).
