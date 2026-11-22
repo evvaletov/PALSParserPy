@@ -361,6 +361,17 @@ build or a typo in the variable. Note that <code class="docutils literal notrans
 succeeds: the library is looked up lazily so that tooling which only reads the
 package — building these docs, for one — does not need a C++ toolchain.</p>
 </section>
+<section id="matching-versions">
+<h2>Matching versions<a class="headerlink" href="#matching-versions" title="Link to this heading">¶</a></h2>
+<p>PALSParserPy mirrors the C library’s structs by their memory layout, so it
+works only with the PALSParserCpp versions it was written against, which are
+listed in <code class="docutils literal notranslate"><span class="pre">palsparserpy._clib.SUPPORTED_LIBRARY_VERSIONS</span></code>. The first call
+checks the version the library reports and fails with a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> naming
+the library’s path, its version and the versions needed, rather than risk
+reading mismatched structs. A library older than PALSParserCpp’s
+<code class="docutils literal notranslate"><span class="pre">pals_parser_cpp_version()</span></code> function is refused the same way.</p>
+<p><code class="docutils literal notranslate"><span class="pre">pp.library_version()</span></code> returns the version of the library in use.</p>
+</section>
 </section>
 
         </article>
@@ -424,6 +435,7 @@ package — building these docs, for one — does not need a C++ toolchain.</p>
 <li><a class="reference internal" href="#install-the-python-package">3. Install the Python package</a></li>
 <li><a class="reference internal" href="#check-the-installation">Check the installation</a></li>
 <li><a class="reference internal" href="#pointing-at-a-palsparsercpp-elsewhere">Pointing at a PALSParserCpp elsewhere</a></li>
+<li><a class="reference internal" href="#matching-versions">Matching versions</a></li>
 </ul>
 </li>
 </ul>
