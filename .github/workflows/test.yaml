@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.10', '3.12']
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout PALSParserPy repository
@@ -35,27 +35,29 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # PALSParserCpp fetches rapidyaml (and the rest) itself via CMake FetchContent,
-      # so a compiler and CMake are all that is needed. Both runners ship CMake
-      # preinstalled; only Linux needs a compiler pulled in explicitly.
+      # so a compiler and CMake are all that is needed. Every runner ships CMake
+      # preinstalled, and macOS and Windows a compiler (Visual Studio on Windows);
+      # only Linux needs one pulled in explicitly.
       - name: Install system dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
 
+      # `cmake --build` rather than make, which the Visual Studio generator does
+      # not use. Visual Studio picks the configuration at build time and writes
+      # build/Release/PALSParserCpp.dll; the other generators ignore --config.
       - name: Build C++ library
         run: |
           cd PALSParserCpp
-          mkdir -p build
-          cd build
-          cmake ..
-          make -j$(nproc 2>/dev/null || echo 2)
-          ls -lah
+          cmake -S . -B build
+          cmake --build build --config Release --parallel
+          ls -lah build build/Release 2>/dev/null || true
         shell: bash
 
-      # PALSParserPy finds ../PALSParserCpp/build/ by itself, which is the layout
-      # the two checkouts above make. pytest puts the checkout on sys.path, so the
-      # package needs no install; pytest itself does.
+      # PALSParserPy finds ../PALSParserCpp/build/ (or build/Release/) by itself,
+      # which is the layout the two checkouts above make. pytest puts the
+      # checkout on sys.path, so the package needs no install; pytest itself does.
       - name: Run tests
         run: |
           cd $GITHUB_WORKSPACE/PALSParserPy
