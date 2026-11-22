@@ -98,6 +98,12 @@ import palsparserpy as pp
 ```
 
 `PALS_PARSER_CPP_LIB` wins if both are set.
+
+When neither variable is set and no checkout is found, PALSParserPy falls back
+to the library installed in the Python environment itself:
+`<sys.prefix>/lib`, or `<sys.prefix>\Library\bin` on Windows. That is where the
+`palsparsercpp` conda package puts it. A checkout comes first, so your own build
+wins over an installed one.
 `palsparserpy._clib.libparser()._name` returns the resolved path, which is worth
 checking first if calls behave unexpectedly.
 
