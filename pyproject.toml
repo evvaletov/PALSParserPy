@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "Python interface for Particle Accelerator Language Standard (PALS) files"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "GPL-2.0-only"
+license-files = ["LICENSE"]
 authors = [
     { name = "David Sagan", email = "david.sagan@gmail.com" },
 ]
