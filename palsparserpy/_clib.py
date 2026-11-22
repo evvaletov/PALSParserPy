@@ -101,6 +101,8 @@ PARAM_VALUE_STRING = 2
 # c_void_p rather than c_char_p: ctypes would convert the latter to bytes and
 # throw the address away, leaking the string the caller is meant to free.
 _PROTOTYPES = {
+    # A static string, not the caller's to free, so c_char_p is safe here.
+    "pals_parser_cpp_version":     (c_char_p, []),
     "parse_and_expand_PALS":       (LatticesC, [c_char_p, c_char_p]),
     "expand_PALS_string":          (LatticesC, [c_char_p, c_char_p]),
     "free_lattice_problems":       (None, [ProblemListC]),
@@ -229,6 +231,66 @@ def _find_library() -> str:
         f"Searched:\n{searched}")
 
 
+# ─── library version ─────────────────────────────────────────────────────────
+
+# The PALSParserCpp versions whose C API the structs and prototypes above
+# mirror, oldest and newest, both inclusive. ctypes copies the library's
+# structs by layout, so a library outside this range may not match them, and
+# libparser() refuses it. Widen the range only after checking PALSParserCpp.h
+# against the bindings here.
+SUPPORTED_LIBRARY_VERSIONS = ((0, 0, 3), (0, 0, 3))
+
+
+def _supported_text() -> str:
+    """The supported range for a message: "0.0.3", or "0.0.3 to 0.0.5"."""
+    lo, hi = (".".join(map(str, v)) for v in SUPPORTED_LIBRARY_VERSIONS)
+    return lo if lo == hi else f"{lo} to {hi}"
+
+
+def _check_version(lib, path: str) -> None:
+    """Raise ``RuntimeError`` unless ``lib`` is a supported PALSParserCpp.
+
+    Runs before any other prototype is bound: a library from before
+    ``pals_parser_cpp_version`` existed may lack other functions too, and its
+    version is the clearer thing to report.
+    """
+    needs = (f"This palsparserpy needs PALSParserCpp {_supported_text()}. "
+             "Build or install a matching library, or point "
+             "PALS_PARSER_CPP_LIB or PALS_PARSER_CPP_DIR at one.")
+    fn = getattr(lib, "pals_parser_cpp_version", None)
+    if fn is None:
+        raise RuntimeError(
+            f"The PALSParserCpp library at {path} has no "
+            f"pals_parser_cpp_version(), so it is older than any version this "
+            f"package supports. {needs}")
+    fn.restype = c_char_p
+    fn.argtypes = []
+    raw = fn()
+    text = raw.decode("ascii", "replace") if raw else ""
+    try:
+        version = tuple(int(part) for part in text.split("."))
+    except ValueError:
+        version = ()
+    if len(version) != 3:
+        raise RuntimeError(
+            f"The PALSParserCpp library at {path} reports its version as "
+            f"{text!r}, which is not major.minor.patch. {needs}")
+    lo, hi = SUPPORTED_LIBRARY_VERSIONS
+    if not lo <= version <= hi:
+        raise RuntimeError(
+            f"The PALSParserCpp library at {path} is version {text}, whose "
+            f"structs may not match this package's. {needs}")
+
+
+def library_version() -> str:
+    """The version of the PALSParserCpp library in use, such as ``"0.0.3"``.
+
+    Loads the library if it is not loaded yet, so it raises whatever
+    :func:`libparser` raises when the library is missing or unsupported.
+    """
+    return libparser().pals_parser_cpp_version().decode("ascii")
+
+
 _lib = None
 
 
@@ -236,7 +298,8 @@ def libparser() -> ctypes.CDLL:
     """The loaded PALSParserCpp shared library, with every prototype bound.
 
     Resolved on first use and cached thereafter. Raises ``FileNotFoundError``
-    listing every path tried if the library cannot be found.
+    listing every path tried if the library cannot be found, and
+    ``RuntimeError`` if it is outside ``SUPPORTED_LIBRARY_VERSIONS``.
 
     Resolution is deliberately lazy rather than done at import: ``import
     palsparserpy`` must succeed without the C library present, so that
@@ -246,7 +309,9 @@ def libparser() -> ctypes.CDLL:
     """
     global _lib
     if _lib is None:
-        lib = ctypes.CDLL(_find_library())
+        path = _find_library()
+        lib = ctypes.CDLL(path)
+        _check_version(lib, path)
         for name, (restype, argtypes) in _PROTOTYPES.items():
             fn = getattr(lib, name)
             fn.restype = restype

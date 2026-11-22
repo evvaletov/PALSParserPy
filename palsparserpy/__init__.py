@@ -24,7 +24,7 @@ Translating one::
                        "lattice.bmad")
 """
 
-from ._clib import YAML_NULL_ID
+from ._clib import YAML_NULL_ID, library_version
 from .node import (PALSParseError, YAMLNode, YAMLTree, add_map, add_scalar,
                    add_sequence, create_empty_tree, deep_copy_children,
                    deep_copy_node, get_parent, is_map, is_scalar, is_sequence,
@@ -47,6 +47,8 @@ from .to_xsuite import (XsuiteBeamline, XsuiteController, XsuiteEle,
 __version__ = "0.0.1"
 
 __all__ = [
+    # the C library underneath
+    "library_version",
     # tree objects and YAML manipulation
     "YAMLTree", "YAMLNode", "PALSParseError", "YAML_NULL_ID",
     "parse_file", "parse_string", "create_empty_tree",
