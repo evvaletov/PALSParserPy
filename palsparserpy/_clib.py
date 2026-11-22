@@ -168,6 +168,12 @@ def _candidates() -> list[str]:
          directory is searched
       3. a PALSParserCpp checkout beside this one, and the checkout this one sits
          inside (both layouts the installation guide describes)
+      4. the library directory of the Python environment itself,
+         ``<sys.prefix>/lib`` (``<sys.prefix>\\Library\\bin`` on Windows), where
+         a conda package installs it
+
+    A checkout comes before the environment so that a developer's own build
+    wins over an installed one.
     """
     # MSVC drops the "lib" prefix and writes into a per-configuration
     # subdirectory; the single-config generators used elsewhere write straight
@@ -190,6 +196,15 @@ def _candidates() -> list[str]:
         for sub in subdirs:
             for name in names:
                 out.append(os.path.normpath(os.path.join(root, "build", sub, name)))
+
+    # conda installs DLLs on Windows into Library\bin, beside the executables
+    # that load them, and shared libraries elsewhere into lib.
+    if sys.platform == "win32":
+        libdir = os.path.join(sys.prefix, "Library", "bin")
+    else:
+        libdir = os.path.join(sys.prefix, "lib")
+    for name in names:
+        out.append(os.path.join(libdir, name))
     return out
 
 
@@ -204,7 +219,8 @@ def _find_library() -> str:
     raise FileNotFoundError(
         f"PALSParserPy could not find the PALSParserCpp shared library "
         f"(libPALSParserCpp.{_dlext()}).\n\n"
-        "Build it from a PALSParserCpp checkout:\n"
+        "Install it into this environment (conda install palsparsercpp), or\n"
+        "build it from a PALSParserCpp checkout:\n"
         "    cmake -S . -B build && cmake --build build\n\n"
         "Then either clone PALSParserCpp next to PALSParserPy, or point\n"
         "PALSParserPy at it:\n"
