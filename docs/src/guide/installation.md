@@ -112,3 +112,15 @@ listing every path that was tried, which is usually enough to spot a missing
 build or a typo in the variable. Note that `import palsparserpy` itself always
 succeeds: the library is looked up lazily so that tooling which only reads the
 package — building these docs, for one — does not need a C++ toolchain.
+
+## Matching versions
+
+PALSParserPy mirrors the C library's structs by their memory layout, so it
+works only with the PALSParserCpp versions it was written against, which are
+listed in `palsparserpy._clib.SUPPORTED_LIBRARY_VERSIONS`. The first call
+checks the version the library reports and fails with a `RuntimeError` naming
+the library's path, its version and the versions needed, rather than risk
+reading mismatched structs. A library older than PALSParserCpp's
+`pals_parser_cpp_version()` function is refused the same way.
+
+`pp.library_version()` returns the version of the library in use.
