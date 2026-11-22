@@ -347,7 +347,12 @@ one any time before that first call works, including after <code class="docutils
 <span class="kn">import</span><span class="w"> </span><span class="nn">palsparserpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pp</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">PALS_PARSER_CPP_LIB</span></code> wins if both are set.
+<p><code class="docutils literal notranslate"><span class="pre">PALS_PARSER_CPP_LIB</span></code> wins if both are set.</p>
+<p>When neither variable is set and no checkout is found, PALSParserPy falls back
+to the library installed in the Python environment itself:
+<code class="docutils literal notranslate"><span class="pre">&lt;sys.prefix&gt;/lib</span></code>, or <code class="docutils literal notranslate"><span class="pre">&lt;sys.prefix&gt;\Library\bin</span></code> on Windows. That is where the
+<code class="docutils literal notranslate"><span class="pre">palsparsercpp</span></code> conda package puts it. A checkout comes first, so your own build
+wins over an installed one.
 <code class="docutils literal notranslate"><span class="pre">palsparserpy._clib.libparser()._name</span></code> returns the resolved path, which is worth
 checking first if calls behave unexpectedly.</p>
 <p>If the library cannot be found, the first call fails with a <code class="docutils literal notranslate"><span class="pre">FileNotFoundError</span></code>
