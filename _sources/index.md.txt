@@ -31,6 +31,13 @@ guide/translation
 api
 ```
 
+```{toctree}
+:hidden:
+:caption: Maintainers
+
+maintainer/releases
+```
+
 ## What it does
 
 1. **Parse** PALS-format YAML into a `YAMLNode` tree, or build one from

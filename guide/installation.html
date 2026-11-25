@@ -203,6 +203,10 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../api.html">API Reference</a></li>
 </ul>
+<p class="caption" role="heading"><span class="caption-text">Maintainers</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../maintainer/releases.html">Binary wheels and release automation</a></li>
+</ul>
 
 </div><div class="sidebar-tree">
   <ul>
@@ -251,17 +255,29 @@
         <article role="main" id="furo-main-content">
           <section class="tex2jax_ignore mathjax_ignore" id="installation">
 <h1>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h1>
-<p>PALSParserPy is a Python wrapper around the C library built by
-<a class="reference external" href="https://github.com/pals-project/PALSParserCpp">PALSParserCpp</a>. That library is
-compiled from that repository rather than shipped with this package, so
-PALSParserPy has to be told where it is. By default it looks for a PALSParserCpp
-checkout beside its own, which is the layout below; if you keep PALSParserCpp
-somewhere else, see <a class="reference internal" href="#pointing-at-a-palsparsercpp-elsewhere">Pointing at a PALSParserCpp
-elsewhere</a> instead.</p>
-<p>macOS, Linux, and Windows are all supported — the correct library extension for
-the platform (<code class="docutils literal notranslate"><span class="pre">.dylib</span></code>, <code class="docutils literal notranslate"><span class="pre">.so</span></code>, <code class="docutils literal notranslate"><span class="pre">.dll</span></code>) is worked out at load time. Python 3.8 or
-newer is required, and the interpreter must be built for the same architecture as
-the library (an x86-64 Python cannot load an arm64 <code class="docutils literal notranslate"><span class="pre">.dylib</span></code>).</p>
+<section id="published-wheels-pip-and-uv">
+<h2>Published wheels (pip and uv)<a class="headerlink" href="#published-wheels-pip-and-uv" title="Link to this heading">¶</a></h2>
+<p>Install a release with binary wheels (0.0.2 or later) using:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">pip install palsparserpy</span>
+<span class="gp"># </span>Or<span class="w"> </span><span class="k">in</span><span class="w"> </span>a<span class="w"> </span>uv-managed<span class="w"> </span>project:
+<span class="go">uv add palsparserpy</span>
+</pre></div>
+</div>
+<p>Supported wheels include PALSParserCpp and its native dependencies; no separate
+C++ checkout is required. Initial wheel targets are Linux x86-64 (glibc 2.28+),
+macOS Intel/ARM (11+), and Windows x86-64. Python 3.10 or newer is required.
+See <a class="reference internal" href="../maintainer/releases.html"><span class="std std-doc">Binary wheels and release automation</span></a> for build and release
+configuration. Other platforms can compile the complete source distribution.</p>
+</section>
+<section id="development-with-an-external-library">
+<h2>Development with an external library<a class="headerlink" href="#development-with-an-external-library" title="Link to this heading">¶</a></h2>
+<p>The steps below use a separately built PALSParserCpp checkout. Explicit
+<code class="docutils literal notranslate"><span class="pre">PALS_PARSER_CPP_LIB</span></code> or <code class="docutils literal notranslate"><span class="pre">PALS_PARSER_CPP_DIR</span></code> overrides take precedence over
+bundled wheel libraries. Without an explicit override, a bundled library takes
+precedence over automatically discovered sibling checkouts.</p>
+<p>The interpreter must match the library’s architecture: an x86-64 Python cannot
+load an arm64 <code class="docutils literal notranslate"><span class="pre">.dylib</span></code>.</p>
+</section>
 <section id="clone-the-repositories">
 <span id="1-clone-the-repositories"></span><h2>1. Clone the repositories<a class="headerlink" href="#clone-the-repositories" title="Link to this heading">¶</a></h2>
 <div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">git clone https://github.com/pals-project/PALSParserCpp.git</span>
@@ -298,11 +314,13 @@ the PALSParserCpp <code class="docutils literal notranslate"><span class="pre">R
 <section id="install-the-python-package">
 <span id="3-install-the-python-package"></span><h2>3. Install the Python package<a class="headerlink" href="#install-the-python-package" title="Link to this heading">¶</a></h2>
 <p>From the <code class="docutils literal notranslate"><span class="pre">PALSParserPy</span></code> directory:</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">pip install -e .</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp"># </span>macOS/Linux:<span class="w"> </span>keep<span class="w"> </span>the<span class="w"> </span>external-library<span class="w"> </span>development<span class="w"> </span>workflow
+<span class="go">PALS_BUNDLE_NATIVE=0 python -m pip install -e .</span>
 </pre></div>
 </div>
-<p>PALSParserPy has no Python dependencies — the C library is all it binds — so this
-installs nothing but the package itself. The <code class="docutils literal notranslate"><span class="pre">-e</span></code> (editable) install means edits
+<p>On PowerShell, first set <code class="docutils literal notranslate"><span class="pre">$env:PALS_BUNDLE_NATIVE</span> <span class="pre">=</span> <span class="pre">&quot;0&quot;</span></code>, then run
+<code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-e</span> <span class="pre">.</span></code>. This mode installs the Python wrapper without
+building a bundled native library. The <code class="docutils literal notranslate"><span class="pre">-e</span></code> (editable) install means edits
 to the checkout take effect without reinstalling.</p>
 <p>Installing is optional if you only want to run the bundled scripts: the examples
 and the test suite put the repository root on <code class="docutils literal notranslate"><span class="pre">sys.path</span></code> themselves.</p>
@@ -430,6 +448,8 @@ reading mismatched structs. A library older than PALSParserCpp’s
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Installation</a><ul>
+<li><a class="reference internal" href="#published-wheels-pip-and-uv">Published wheels (pip and uv)</a></li>
+<li><a class="reference internal" href="#development-with-an-external-library">Development with an external library</a></li>
 <li><a class="reference internal" href="#clone-the-repositories">1. Clone the repositories</a></li>
 <li><a class="reference internal" href="#build-the-c-library">2. Build the C library</a></li>
 <li><a class="reference internal" href="#install-the-python-package">3. Install the Python package</a></li>
