@@ -30,7 +30,7 @@ jobs:
           NATIVE_VERSION: ${{ inputs.version }}
           RAPIDYAML_TAG: ${{ inputs.rapidyaml_tag }}
           PCRE2_TAG: ${{ inputs.pcre2_tag }}
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v8
         id: pr
         with:
           branch: automation/native-release
